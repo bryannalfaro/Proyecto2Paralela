@@ -11,50 +11,36 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <unistd.h>
-#include <openssl/des.h>
+#include <rpc/des_crypt.h>	//OJO: utilizar otra libreria de no poder con esta
+
+void decrypt(long key, char *ciph, int len);
 
 //descifra un texto dado una llave
-void decrypt(long key, char *ciph, int len) {
+void decrypt(long key, char *ciph, int len){
+  //set parity of key and do decrypt
   long k = 0;
   for(int i=0; i<8; ++i){
     key <<= 1;
     k += (key & (0xFE << i*8));
   }
-    // Set parity of key
-    DES_cblock des_key;
-    memcpy(des_key, &k, sizeof(k));
-    DES_set_odd_parity(&des_key);
-
-    // Initialize key schedule
-    DES_key_schedule key_schedule;
-    DES_set_key_unchecked(&des_key, &key_schedule);
-
-    // Decrypt the message using ECB mode
-    DES_ecb_encrypt((const_DES_cblock *)ciph, (DES_cblock *)ciph, &key_schedule, DES_DECRYPT);
+  des_setparity((char *)&k);  //el poder del casteo y &
+  ecb_crypt((char *)&k, (char *) ciph, 16, DES_DECRYPT);
 }
 
 //cifra un texto dado una llave
-void encrypt(long key, char *ciph) {
-    // Set parity of key
-    long k = 0;
+void encrypt(long key, char *ciph){
+  //set parity of key and do encrypt
+  long k = 0;
   for(int i=0; i<8; ++i){
     key <<= 1;
     k += (key & (0xFE << i*8));
   }
-    DES_cblock des_key;
-    memcpy(des_key, &k, sizeof(k));
-    DES_set_odd_parity(&des_key);
-
-    // Initialize key schedule
-    DES_key_schedule key_schedule;
-    DES_set_key_unchecked(&des_key, &key_schedule);
-
-    // Encrypt the message using ECB mode
-    DES_ecb_encrypt((const_DES_cblock *)ciph, (DES_cblock *)ciph, &key_schedule, DES_ENCRYPT);
+  des_setparity((char *)&k);  //el poder del casteo y &
+  ecb_crypt((char *)&k, (char *) ciph, 16, DES_ENCRYPT);
 }
 
 //palabra clave a buscar en texto descifrado para determinar si se rompio el codigo
-char search[] = "Ho";
+char search[] = "es una prueba de";
 int tryKey(long key, char *ciph, int len){
   char temp[len+1]; //+1 por el caracter terminal
   memcpy(temp, ciph, len);
@@ -63,7 +49,7 @@ int tryKey(long key, char *ciph, int len){
   return strstr((char *)temp, search) != NULL;
 }
 
-char eltexto[] = "Hola mundo";
+char eltexto[] = "Esta es una prueba de proyecto 2";
 
 long the_key = 123456L;
 //2^56 / 4 es exactamente 18014398509481983
@@ -71,29 +57,25 @@ long the_key = 123456L;
 //long the_key = 18014398509481983L +1L;
 
 int main(int argc, char *argv[]){ //char **argv
-  //printf("Plain text");
   int N, id;
-  long upper = 400L; //upper bound DES keys 2^56
+  long upper = (1L <<56); //upper bound DES keys 2^56
   long mylower, myupper;
   MPI_Status st;
   MPI_Request req;
-  //printf("Plain text");
+
   int ciphlen = strlen(eltexto);
-  printf("Texto a encriptar: %s\n", eltexto);
   MPI_Comm comm = MPI_COMM_WORLD;
 
   //cifrar el texto
   char cipher[ciphlen+1];
   memcpy(cipher, eltexto, ciphlen);
   cipher[ciphlen]=0;
-  printf("Plain text");
   encrypt(the_key, cipher);
-  printf("Texto Cifrado: %s\n", cipher);
+
   //INIT MPI
-  MPI_Init(&argc, &argv);
+  MPI_Init(NULL, NULL);
   MPI_Comm_size(comm, &N);
   MPI_Comm_rank(comm, &id);
-  printf("Process %d of %d\n", id, N);
 
   long found = 0L;
   int ready = 0;
@@ -128,7 +110,6 @@ int main(int argc, char *argv[]){ //char **argv
 
   //wait y luego imprimir el texto
   if(id==0){
-    printf("Process %d waiting\n", id);
     MPI_Wait(&req, &st);
     decrypt(found, cipher, ciphlen);
     printf("Key = %li\n\n", found);

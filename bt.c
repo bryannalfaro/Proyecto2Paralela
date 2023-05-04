@@ -61,8 +61,21 @@ int tryKey(long key, char *ciph, int len){
   char temp[len+1]; //+1 por el caracter terminal
   memcpy(temp, ciph, len);
   temp[len]=0;	//caracter terminal
-  decrypt(key, temp, len);
-  return strstr((char *)temp, search) != NULL;
+  printf("Cipher text before trykey: %s key: %i\n", temp, key);
+  //print len of temp
+  int len1 = strlen(temp);
+
+char newStr[len1];
+
+for (int i = 0; i < len1; i++) {
+    newStr[i] = temp[i];
+}
+  printf("CIPHTEMP: %d\n", sizeof(newStr));
+  //i
+
+  decrypt(key, newStr, len);
+  printf("Cipher text inside trykey: %s\n", newStr);
+  return strstr((char *)newStr, search) != NULL;
 }
 
 char eltexto[] = "Hola Raul";
@@ -102,8 +115,11 @@ int main(int argc, char *argv[]){ //char **argv
     //printf("Plain text: %s\n", eltexto);
     //print cipher
     //printf("Cipher text inside: %s\n", cipher);
-    decrypt(the_key, cipher, ciphlen);
-    printf("\nAACipher text: %s\n", cipher);
+    // decrypt(the_key, cipher, ciphlen);
+    // printf("\nAACipher text: %s\n", cipher);
+    //use trykey
+    printf("CIPHLEN: %d\n", ciphlen);
+    printf("Trying key %ld\n", tryKey(the_key, cipher, ciphlen));
   }
 
   printf("Process %d exiting\n", id);
