@@ -36,36 +36,40 @@ void decrypt(long key, char *ciph, int len) {
 }
 
 //cifra un texto dado una llave
-void encrypt(long key, char *ciph) {
+void encrypt_h(long key, char *ciph) {
     // Set parity of key
     long k = 0;
   for(int i=0; i<8; ++i){
     key <<= 1;
     k += (key & (0xFE << i*8));
   }
-    DES_cblock des_key;
-    memcpy(des_key, &k, sizeof(k));
-    DES_set_odd_parity(&des_key);
+  DES_cblock des_key;
+  memcpy(des_key, &k, sizeof(k));
+  DES_set_odd_parity(&des_key);
+  char ciphertext[strlen(ciph)];
 
-    // Initialize key schedule
-    DES_key_schedule key_schedule;
-    DES_set_key_unchecked(&des_key, &key_schedule);
+  // Initialize key schedule
+  DES_key_schedule key_schedule;
+  DES_set_key_unchecked(&des_key, &key_schedule);
 
-    // Encrypt the message using ECB mode
-    DES_ecb_encrypt((const_DES_cblock *)ciph, (DES_cblock *)ciph, &key_schedule, DES_ENCRYPT);
+  // Encrypt the message using ECB mode
+  DES_ecb_encrypt((const_DES_cblock *)ciph, (DES_cblock *)ciphertext, &key_schedule, DES_ENCRYPT);
+  strcpy(ciph, ciphertext);
+  printf("AAAAAAAA, %s\n", ciph);
 }
 
 //palabra clave a buscar en texto descifrado para determinar si se rompio el codigo
-char search[] = "Hola";
+char search[] = "donaldo";
 int tryKey(long key, char *ciph, int len){
   char temp[len+1]; //+1 por el caracter terminal
   memcpy(temp, ciph, len);
   temp[len]=0;	//caracter terminal
   decrypt(key, temp, len);
+  printf("IMPRIMIR %s\n", temp);
   return strstr((char *)temp, search) != NULL;
 }
 
-char eltexto[] = "Hola Raul";
+char eltexto[] = "Hola Raul, hola bryann, hola donaldo, ya me quiero ir a dormir";
 
 long the_key = 3L;
 //2^56 / 4 es exactamente 18014398509481983
@@ -89,20 +93,22 @@ int main(int argc, char *argv[]){ //char **argv
   memcpy(cipher, eltexto, ciphlen);
   cipher[ciphlen]=0;
   //printf("Plain text");
-  encrypt(the_key, cipher);
+  encrypt_h(the_key, cipher);
   printf("Cipher text: %s\n", cipher);
   //INIT MPI
-  // MPI_Init(&argc, &argv);
-  // MPI_Comm_size(comm, &N);
-  // MPI_Comm_rank(comm, &id);
-  // printf("Process %d of %d\n", id, N);
+  MPI_Init(&argc, &argv);
+  MPI_Comm_size(comm, &N);
+  MPI_Comm_rank(comm, &id);
+  printf("Process %d of %d\n", id, N);
 
   //si es el id 0 desencriptar el texto
   if(id==0){
     //printf("Plain text: %s\n", eltexto);
     //print cipher
     //printf("Cipher text inside: %s\n", cipher);
-    decrypt(the_key, cipher, ciphlen);
+    // decrypt(the_key, cipher, ciphlen);
+    printf("\nAACipher text----------: %s\n", cipher);
+    printf("TRYING KEY %d \n", tryKey(the_key, cipher, ciphlen));
     printf("\nAACipher text: %s\n", cipher);
   }
 
