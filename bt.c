@@ -13,6 +13,47 @@
 #include <unistd.h>
 #include <openssl/des.h>
 
+char* read_file(const char* filename) {
+    FILE* fp;
+    char* buffer;
+    long file_size;
+
+    // Open file for reading in binary mode
+    fp = fopen(filename, "rb");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return NULL;
+    }
+
+    // Get file size
+    fseek(fp, 0L, SEEK_END);
+    file_size = ftell(fp);
+    rewind(fp);
+
+    // Allocate memory for buffer
+    buffer = (char*) malloc(file_size + 1);
+    if (buffer == NULL) {
+        fclose(fp);
+        perror("Error allocating memory");
+        return NULL;
+    }
+
+    // Read file contents into buffer
+    if (fread(buffer, file_size, 1, fp) != 1) {
+        fclose(fp);
+        free(buffer);
+        perror("Error reading file");
+        return NULL;
+    }
+
+    // Null-terminate the buffer
+    buffer[file_size] = '\0';
+
+    // Close file and return buffer
+    fclose(fp);
+    return buffer;
+}
+
 //descifra un texto dado una llave
 void decrypt(long key, char *ciph, int len) {
     // Set parity of key
@@ -112,19 +153,30 @@ long the_key = 3L;
 
 int main(int argc, char *argv[]){ //char **argv
   //printf("Plain text");
+  if (argc < 2) {
+    return 1;
+  }
+  the_key = strtol(argv[1], NULL, 10);
+
+
   int N, id;
   long upper = (1L <<56); //upper bound DES keys 2^56
   long mylower, myupper;
   MPI_Status st;
   MPI_Request req;
   //printf("Plain text");
-  int ciphlen = strlen(eltexto);
   //printf("Cipher text: %s\n", eltexto);
   MPI_Comm comm = MPI_COMM_WORLD;
 
+  char* text = read_file("text.txt");
+  if (text == NULL) {
+      printf("Error melon \n");
+      return 0;
+  }
+  int ciphlen = strlen(text);
   //cifrar el texto
   char cipher[ciphlen+1];
-  memcpy(cipher, eltexto, ciphlen);
+  memcpy(cipher, text, ciphlen);
   cipher[ciphlen]=0;
   //printf("Plain text");
   encrypt_h(the_key, cipher, ciphlen);
