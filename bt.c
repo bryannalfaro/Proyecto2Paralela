@@ -133,7 +133,7 @@ void encrypt_h(long key, char *ciph, int len) {
 }
 
 //palabra clave a buscar en texto descifrado para determinar si se rompio el codigo
-char search[] = "hola";
+char search[] = "es una prueba de";
 int tryKey(long key, char *ciph, int len){
   char temp[len+1]; //+1 por el caracter terminal
   strcpy(temp, ciph);
@@ -143,8 +143,6 @@ int tryKey(long key, char *ciph, int len){
   // printf("IMPRIMIR %s\n", temp);
   return strstr((char *)temp, search) != NULL;
 }
-
-char eltexto[] = "Hola Raul, hola bryann, hola donaldo, ya me quiero ir a dormir. Pero en realidad lo que sucede es que ya no quiero hacer este proyecto porque me hace llorar el no poder culminar una tarea tan simple pero a la vez tan filosofica, me hace pensar realmente en mi existencia.";
 
 long the_key = 3L;
 //2^56 / 4 es exactamente 18014398509481983
@@ -167,6 +165,7 @@ int main(int argc, char *argv[]){ //char **argv
   //printf("Plain text");
   //printf("Cipher text: %s\n", eltexto);
   MPI_Comm comm = MPI_COMM_WORLD;
+  double start, end;
 
   char* text = read_file("text.txt");
   if (text == NULL) {
@@ -200,6 +199,7 @@ int main(int argc, char *argv[]){ //char **argv
   printf("Process %d lower %ld upper %ld\n", id, mylower, myupper);
 
   //non blocking receive, revisar en el for si alguien ya encontro
+  start = MPI_Wtime();
   MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
 
   for(long i = mylower; i<myupper; ++i){
@@ -210,12 +210,15 @@ int main(int argc, char *argv[]){ //char **argv
     if(tryKey(i, cipher, ciphlen)){
       found = i;
       printf("Process %d found the key\n", id);
+      end = MPI_Wtime();
       for(int node=0; node<N; node++){
         MPI_Send(&found, 1, MPI_LONG, node, 0, comm); //avisar a otros
       }
       break;
     }
+
   }
+  
 
   //wait y luego imprimir el texto
   if(id==0){
@@ -224,6 +227,7 @@ int main(int argc, char *argv[]){ //char **argv
     printf("Key = %li\n\n", found);
     cipher[ciphlen+1]='\0';
     printf("%s\n", cipher);
+    printf("Time to break the DES %f\n",end-start);
   }
   printf("Process %d exiting\n", id);
 
