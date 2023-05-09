@@ -222,6 +222,7 @@ int main(int argc, char *argv[]){ //char **argv
     MPI_Wait(&req, &st);
     decrypt(found, cipher, ciphlen);
     printf("Key = %li\n\n", found);
+    cipher[ciphlen+1]='\0';
     printf("%s\n", cipher);
   }
   printf("Process %d exiting\n", id);
