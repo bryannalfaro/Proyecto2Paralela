@@ -1,11 +1,3 @@
-//bruteforceNaive.c
-//Tambien cifra un texto cualquiera con un key arbitrario.
-//OJO: asegurarse que la palabra a buscar sea lo suficientemente grande
-//  evitando falsas soluciones ya que sera muy improbable que tal palabra suceda de
-//  forma pseudoaleatoria en el descifrado.
-//>> mpicc bruteforce.c -o desBrute
-//>> mpirun -np <N> desBrute
-
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,10 +5,10 @@
 #include <unistd.h>
 #include <openssl/des.h>
 
-char* read_file(const char* filename) {
+char* readFile(const char* filename) {
     FILE* fp;
     char* buffer;
-    long file_size;
+    long fileSize;
 
     // Open file for reading in binary mode
     fp = fopen(filename, "rb");
@@ -27,11 +19,11 @@ char* read_file(const char* filename) {
 
     // Get file size
     fseek(fp, 0L, SEEK_END);
-    file_size = ftell(fp);
+    fileSize = ftell(fp);
     rewind(fp);
 
     // Allocate memory for buffer
-    buffer = (char*) malloc(file_size + 1);
+    buffer = (char*) malloc(fileSize + 1);
     if (buffer == NULL) {
         fclose(fp);
         perror("Error allocating memory");
@@ -39,7 +31,7 @@ char* read_file(const char* filename) {
     }
 
     // Read file contents into buffer
-    if (fread(buffer, file_size, 1, fp) != 1) {
+    if (fread(buffer, fileSize, 1, fp) != 1) {
         fclose(fp);
         free(buffer);
         perror("Error reading file");
@@ -47,7 +39,7 @@ char* read_file(const char* filename) {
     }
 
     // Null-terminate the buffer
-    buffer[file_size] = '\0';
+    buffer[fileSize] = '\0';
 
     // Close file and return buffer
     fclose(fp);
@@ -64,39 +56,39 @@ void decrypt(long key, char *ciph, int len) {
     }
 
     // Initialize DES key
-    DES_cblock des_key;
-    memcpy(des_key, &k, sizeof(k));
-    DES_set_odd_parity(&des_key);
+    DES_cblock desKey;
+    memcpy(desKey, &k, sizeof(k));
+    DES_set_odd_parity(&desKey);
 
     // Initialize key schedule
-    DES_key_schedule key_schedule;
-    DES_set_key_unchecked(&des_key, &key_schedule);
+    DES_key_schedule keySchedule;
+    DES_set_key_unchecked(&desKey, &keySchedule);
 
     // Decrypt the message using ECB mode
     for (size_t i = 0; i < len; i += 8) {
-        DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &key_schedule, DES_DECRYPT);
+        DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &keySchedule, DES_DECRYPT);
     }
 
     // Check padding
-    size_t pad_len = ciph[len - 1];
-    if (pad_len > 8) {
+    size_t padLen = ciph[len - 1];
+    if (padLen > 8) {
         // Error: Invalid padding
         return;
     }
-    for (size_t i = len - pad_len; i < len; i++) {
-        if (ciph[i] != pad_len) {
+    for (size_t i = len - padLen; i < len; i++) {
+        if (ciph[i] != padLen) {
             // Error: Invalid padding
             return;
         }
     }
 
     // Null-terminate the plaintext
-    ciph[len - pad_len] = '\0';
+    ciph[len - padLen] = '\0';
     // printf("DECRYPTTTT A ABA JKAKAJH KJAH , %s\n", ciph);
 }
 
 //cifra un texto dado una llave
-void encrypt_h(long key, char *ciph, int len) {
+void encryptText(long key, char *ciph, int len) {
 // Set parity of key
     long k = 0;
     for(int i=0; i<8; ++i){
@@ -105,28 +97,28 @@ void encrypt_h(long key, char *ciph, int len) {
     }
 
     // Initialize DES key
-    DES_cblock des_key;
-    memcpy(des_key, &k, sizeof(k));
-    DES_set_odd_parity(&des_key);
+    DES_cblock desKey;
+    memcpy(desKey, &k, sizeof(k));
+    DES_set_odd_parity(&desKey);
 
     // Initialize key schedule
-    DES_key_schedule key_schedule;
-    DES_set_key_unchecked(&des_key, &key_schedule);
+    DES_key_schedule keySchedule;
+    DES_set_key_unchecked(&desKey, &keySchedule);
 
     // Calculate padding length
-    size_t pad_len = 8 - len % 8;
-    if (pad_len == 0) {
-        pad_len = 8;
+    size_t padLen = 8 - len % 8;
+    if (padLen == 0) {
+        padLen = 8;
     }
 
     // Add padding to message
-    for (size_t i = len; i < len + pad_len; i++) {
-        ciph[i] = pad_len;
+    for (size_t i = len; i < len + padLen; i++) {
+        ciph[i] = padLen;
     }
 
     // Encrypt the message using ECB mode
-    for (size_t i = 0; i < len + pad_len; i += 8) {
-        DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &key_schedule, DES_ENCRYPT);
+    for (size_t i = 0; i < len + padLen; i += 8) {
+        DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &keySchedule, DES_ENCRYPT);
     }
   // strcpy(ciph, ciphertext);
   // printf("AAAAAAAA, %s\n", ciph);
@@ -144,22 +136,22 @@ int tryKey(long key, char *ciph, int len){
   return strstr((char *)temp, search) != NULL;
 }
 
-long the_key = 3L;
+long theKey = 3L;
 //2^56 / 4 es exactamente 18014398509481983
-//long the_key = 18014398509481983L;
-//long the_key = 18014398509481983L +1L;
+//long theKey = 18014398509481983L;
+//long theKey = 18014398509481983L +1L;
 
 int main(int argc, char *argv[]){ //char **argv
   //printf("Plain text");
   if (argc < 2) {
     return 1;
   }
-  the_key = strtol(argv[1], NULL, 10);
+  theKey = strtol(argv[1], NULL, 10);
 
 
   int N, id;
   long upper = (1L <<56); //upper bound DES keys 2^56
-  long mylower, myupper;
+  long myLower, myUpper;
   MPI_Status st;
   MPI_Request req;
   //printf("Plain text");
@@ -167,18 +159,18 @@ int main(int argc, char *argv[]){ //char **argv
   MPI_Comm comm = MPI_COMM_WORLD;
   double start, end;
 
-  char* text = read_file("text.txt");
+  char* text = readFile("text.txt");
   if (text == NULL) {
       printf("Error melon \n");
       return 0;
   }
-  int ciphlen = strlen(text);
+  int ciphLen = strlen(text);
   //cifrar el texto
-  char cipher[ciphlen+1];
-  memcpy(cipher, text, ciphlen);
-  cipher[ciphlen]=0;
+  char cipher[ciphLen+1];
+  memcpy(cipher, text, ciphLen);
+  cipher[ciphLen]=0;
   //printf("Plain text");
-  encrypt_h(the_key, cipher, ciphlen);
+  encryptText(theKey, cipher, ciphLen);
   printf("Cipher text: %s\n", cipher);
   //INIT MPI
   MPI_Init(NULL, NULL);
@@ -189,25 +181,25 @@ int main(int argc, char *argv[]){ //char **argv
   int ready = 0;
 
   //distribuir trabajo de forma naive
-  long range_per_node = upper / N;
-  mylower = range_per_node * id;
-  myupper = range_per_node * (id+1) -1;
+  long rangePerNode = upper / N;
+  myLower = rangePerNode * id;
+  myUpper = rangePerNode * (id+1) -1;
   if(id == N-1){
     //compensar residuo
-    myupper = upper;
+    myUpper = upper;
   }
-  printf("Process %d lower %ld upper %ld\n", id, mylower, myupper);
+  printf("Process %d lower %ld upper %ld\n", id, myLower, myUpper);
 
   //non blocking receive, revisar en el for si alguien ya encontro
   start = MPI_Wtime();
   MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
 
-  for(long i = mylower; i<myupper; ++i){
+  for(long i = myLower; i<myUpper; ++i){
     MPI_Test(&req, &ready, MPI_STATUS_IGNORE);
     if(ready)
       break;  //ya encontraron, salir
 
-    if(tryKey(i, cipher, ciphlen)){
+    if(tryKey(i, cipher, ciphLen)){
       found = i;
       printf("Process %d found the key\n", id);
       end = MPI_Wtime();
@@ -218,14 +210,14 @@ int main(int argc, char *argv[]){ //char **argv
     }
 
   }
-  
+
 
   //wait y luego imprimir el texto
   if(id==0){
     MPI_Wait(&req, &st);
-    decrypt(found, cipher, ciphlen);
+    decrypt(found, cipher, ciphLen);
     printf("Key = %li\n\n", found);
-    cipher[ciphlen+1]='\0';
+    cipher[ciphLen+1]='\0';
     printf("%s\n", cipher);
     printf("Time to break the DES %f\n",end-start);
   }
