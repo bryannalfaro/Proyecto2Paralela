@@ -18,6 +18,11 @@
 #include <unistd.h>
 #include <openssl/des.h>
 
+/**
+ * @brief Read a file into a buffer
+ * @param filename
+ * @return char*
+*/
 char *readFile(const char *filename)
 {
   FILE *fp;
@@ -63,7 +68,14 @@ char *readFile(const char *filename)
   return buffer;
 }
 
-// descifra un texto dado una llave
+/**
+ * @brief decrypt a text given a key
+ * @param key key to decrypt
+ * @param ciph text to decrypt
+ * @param len length of the text
+ *
+ * @return void
+*/
 void decrypt(long key, char *ciph, int len)
 {
   // Set parity of key
@@ -109,7 +121,14 @@ void decrypt(long key, char *ciph, int len)
   ciph[len - padLen] = '\0';
 }
 
-// cifra un texto dado una llave
+/**
+ * @brief encrypt a text given a key
+ * @param key key to encrypt
+ * @param ciph text to encrypt
+ * @param len length of the text
+ *
+ * @return void
+*/
 void encryptText(long key, char *ciph, int len)
 {
   // Set parity of key
@@ -149,11 +168,20 @@ void encryptText(long key, char *ciph, int len)
   }
 }
 
-// palabra clave a buscar en texto descifrado para determinar si se rompio el codigo
+// key word to search in decrypted text to determine if the code was broken
 char search[] = "es una prueba de";
+
+/**
+ * @brief try a key to decrypt a text
+ * @param key key to try
+ * @param ciph text to decrypt
+ * @param len length of the text
+ *
+ * @return int 1 if the key is correct, 0 otherwise
+*/
 int tryKey(long key, char *ciph, int len)
 {
-  char temp[len + 1]; //+1 por el caracter terminal
+  char temp[len + 1]; //+1 because of the terminal character
   strcpy(temp, ciph);
   decrypt(key, temp, len);
   return strstr((char *)temp, search) != NULL;
@@ -162,15 +190,14 @@ int tryKey(long key, char *ciph, int len)
 long theKey = 3L;
 
 int main(int argc, char *argv[])
-{ // char **argv
-  // printf("Plain text");
+{
   if (argc < 2)
   {
     return 1;
   }
-  theKey = strtol(argv[1], NULL, 10);
+  theKey = strtol(argv[1], NULL, 10); //getting the key from the command line
 
-  int N, id;
+  int processSize, id;
   long upper = (1L << 56);
   long found = 0;
   MPI_Status st;
@@ -181,47 +208,49 @@ int main(int argc, char *argv[])
 
   char* text = readFile("text.txt");
   if (text == NULL) {
-      printf("Error melon \n");
+      printf("Error reading \n");
       return 0;
   }
-  
+
   int flag;
   int ciphLen = strlen((char *) text);
-  
-  //cifrar el texto
+
+  //encrypt the text
   char cipher[ciphLen+1];
   memcpy(cipher, text, ciphLen);
   cipher[ciphLen]=0;
-  //printf("Plain text");
+
   encryptText(theKey, cipher, ciphLen);
   printf("Cipher text: %s\n", cipher);
 
+  //MPI
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &id);
-  MPI_Comm_size(MPI_COMM_WORLD, &N);
-   start = MPI_Wtime();
+  MPI_Comm_size(MPI_COMM_WORLD, &processSize);
+
+  start = MPI_Wtime(); //start time
   MPI_Irecv((void*)&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &req);
   int iterCount = 0;
 
   //Iterate in step way
-  for( long i=id;i<upper;i+=N)
+  for( long i=id;i<upper;i+=processSize)
   {
     if (tryKey(i,(char*)cipher,ciphLen))
     {
       found=i;
        end = MPI_Wtime();
-      for( int node=0;node<N;node++)
+      for( int node=0;node<processSize;node++)
         MPI_Send((void*)&found,1,MPI_LONG,node,0, MPI_COMM_WORLD);
 
       break;
     }
-    if(++iterCount% 1000 == 0)
+    if(++iterCount% 1000 == 0) //test every 1000 iterations
     {
       MPI_Test(&req,&flag,&st);
       if(flag)  break;
     }
   }
-  
+
   if (id== 0)
   {
     MPI_Wait(&req,&st); //  in case process 0 finishes  before the key  is  found
@@ -230,5 +259,7 @@ int main(int argc, char *argv[])
     printf( "%li %s \n",found,cipher);
     printf("Time %f",end-start);
   }
+
+  //End MPi
   MPI_Finalize();
 }
