@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
       if (tryKey(i,(char*)cipher,ciphLen))
       {
         #pragma omp critical
-        found=i;33
+        found=i;
       }
     }
     //  communicate  termination  signal
