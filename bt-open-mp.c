@@ -17,6 +17,7 @@
 #include <mpi.h>
 #include <unistd.h>
 #include <openssl/des.h>
+#include <omp.h>
 
 /**
  * @brief Read a file into a buffer
@@ -191,6 +192,8 @@ long theKey = 3L;
 
 int main(int argc, char *argv[])
 {
+
+  const int BLOCK = 1000000;
   if (argc < 2)
   {
     return 1;
@@ -199,12 +202,10 @@ int main(int argc, char *argv[])
 
   int processSize, id;
   long upper = (1L << 56);
-  long found = 0;
   MPI_Status st;
   MPI_Request req;
 
   MPI_Comm comm = MPI_COMM_WORLD;
-  double start, end;
 
   char* text = readFile("text.txt");
   if (text == NULL) {
@@ -212,7 +213,7 @@ int main(int argc, char *argv[])
       return 0;
   }
 
-  int flag;
+  // int flag;
   int ciphLen = strlen((char *) text);
 
   //encrypt the text
@@ -222,44 +223,45 @@ int main(int argc, char *argv[])
 
   encryptText(theKey, cipher, ciphLen);
   printf("Cipher text: %s\n", cipher);
+  long found=-1;
+  int flag=0;
+  MPI_Init(&argc,&argv);
+  double start=MPI_Wtime();
+  MPI_Comm_rank(MPI_COMM_WORLD,&id);
+  MPI_Comm_size(MPI_COMM_WORLD,&processSize);
 
-  //MPI
-  MPI_Init(&argc, &argv);
-  MPI_Comm_rank(MPI_COMM_WORLD, &id);
-  MPI_Comm_size(MPI_COMM_WORLD, &processSize);
-
-  start = MPI_Wtime(); //start time
-  MPI_Irecv((void*)&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &req);
-  int iterCount = 0;
-
-  //Iterate in step way
-  for( long i=id;i<upper;i+=processSize)
+  MPI_Irecv((void*)&found,1,MPI_LONG,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&req);
+  int iterCount=0;
+  long idx=0;
+  while(idx<upper&&found<0)
   {
-    if (tryKey(i,(char*)cipher,ciphLen))
+    #pragma omp  parallel for  default(none)  shared ( cipher ,  ciphLen ,  found, idx ,  id , processSize, BLOCK)
+    for( long i=idx+id;i<idx+processSize*BLOCK;i+=processSize)
     {
-      found=i;
-       end = MPI_Wtime();
+      #pragma omp cancelation point if (found>=0)
+      if (tryKey(i,(char*)cipher,ciphLen))
+      {
+        #pragma omp critical
+        found=i;
+      }
+    }
+    #pragma omp barrier
+
+    if (found>= 0)
+    {
       for( int node=0;node<processSize;node++)
-        MPI_Send((void*)&found,1,MPI_LONG,node,0, MPI_COMM_WORLD);
-
-      break;
+        MPI_Send((void*)&found,1,MPI_LONG,node,0,MPI_COMM_WORLD);
     }
-    if(++iterCount% 1000 == 0) //test every 1000 iterations
-    {
-      MPI_Test(&req,&flag,&st);
-      if(flag)  break;
-    }
+        
+    idx+=processSize*BLOCK;
   }
-
+  
   if (id== 0)
   {
-    MPI_Wait(&req,&st); //  in case process 0 finishes  before the key  is  found
+    MPI_Wait(&req,&st);
     decrypt(found,(char*)cipher,ciphLen);
     cipher[ciphLen+1]='\0';
-    printf( "%li %s \n",found,cipher);
-    printf("Time %f",end-start);
+    printf( "%i  nodes  in %lf  sec  : %li %s \n",processSize,MPI_Wtime()-start,found,cipher);
   }
-
-  //End MPi
   MPI_Finalize();
 }

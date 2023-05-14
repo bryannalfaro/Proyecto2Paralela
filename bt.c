@@ -1,3 +1,15 @@
+/**
+ * @file bt.cpp
+ * @author Raul Jimenez
+ * @author Bryann Alfaro
+ * @author Donaldo Garcia
+ * @brief Naive implementation of brute force
+ * @version 0.1
+ * @date 2023-05-09
+ *
+ * @copyright Copyright (c) 2023
+ *
+ */
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,6 +17,11 @@
 #include <unistd.h>
 #include <openssl/des.h>
 
+/**
+ * @brief Read a file into a buffer
+ * @param filename
+ * @return char*
+*/
 char* readFile(const char* filename) {
     FILE* fp;
     char* buffer;
@@ -46,7 +63,14 @@ char* readFile(const char* filename) {
     return buffer;
 }
 
-//descifra un texto dado una llave
+/**
+ * @brief decrypt a text given a key
+ * @param key key to decrypt
+ * @param ciph text to decrypt
+ * @param len length of the text
+ *
+ * @return void
+*/
 void decrypt(long key, char *ciph, int len) {
     // Set parity of key
     long k = 0;
@@ -84,10 +108,16 @@ void decrypt(long key, char *ciph, int len) {
 
     // Null-terminate the plaintext
     ciph[len - padLen] = '\0';
-    // printf("DECRYPTTTT A ABA JKAKAJH KJAH , %s\n", ciph);
 }
 
-//cifra un texto dado una llave
+/**
+ * @brief encrypt a text given a key
+ * @param key key to encrypt
+ * @param ciph text to encrypt
+ * @param len length of the text
+ *
+ * @return void
+*/
 void encryptText(long key, char *ciph, int len) {
 // Set parity of key
     long k = 0;
@@ -120,90 +150,92 @@ void encryptText(long key, char *ciph, int len) {
     for (size_t i = 0; i < len + padLen; i += 8) {
         DES_ecb_encrypt((DES_cblock *)(ciph + i), (DES_cblock *)(ciph + i), &keySchedule, DES_ENCRYPT);
     }
-  // strcpy(ciph, ciphertext);
-  // printf("AAAAAAAA, %s\n", ciph);
 }
 
-//palabra clave a buscar en texto descifrado para determinar si se rompio el codigo
+// key word to search in decrypted text to determine if the code was broken
 char search[] = "es una prueba de";
+
+/**
+ * @brief try a key to decrypt a text
+ * @param key key to try
+ * @param ciph text to decrypt
+ * @param len length of the text
+ *
+ * @return int 1 if the key is correct, 0 otherwise
+*/
 int tryKey(long key, char *ciph, int len){
-  char temp[len+1]; //+1 por el caracter terminal
+  char temp[len+1]; //+1 because of the terminal character
   strcpy(temp, ciph);
-  // memcpy(temp, ciph, len);
-  // temp[len]=0;	//caracter terminal
   decrypt(key, temp, len);
-  // printf("IMPRIMIR %s\n", temp);
+
   return strstr((char *)temp, search) != NULL;
 }
 
 long theKey = 3L;
-//2^56 / 4 es exactamente 18014398509481983
-//long theKey = 18014398509481983L;
-//long theKey = 18014398509481983L +1L;
 
 int main(int argc, char *argv[]){ //char **argv
-  //printf("Plain text");
   if (argc < 2) {
     return 1;
   }
   theKey = strtol(argv[1], NULL, 10);
 
 
-  int N, id;
+  int processSize, id;
   long upper = (1L <<56); //upper bound DES keys 2^56
   long myLower, myUpper;
   MPI_Status st;
   MPI_Request req;
-  //printf("Plain text");
-  //printf("Cipher text: %s\n", eltexto);
+
   MPI_Comm comm = MPI_COMM_WORLD;
   double start, end;
 
   char* text = readFile("text.txt");
   if (text == NULL) {
-      printf("Error melon \n");
+      printf("Error reading \n");
       return 0;
   }
   int ciphLen = strlen(text);
-  //cifrar el texto
+
+  //encrypt the text
   char cipher[ciphLen+1];
   memcpy(cipher, text, ciphLen);
   cipher[ciphLen]=0;
-  //printf("Plain text");
+
   encryptText(theKey, cipher, ciphLen);
   printf("Cipher text: %s\n", cipher);
+
   //INIT MPI
   MPI_Init(NULL, NULL);
-  MPI_Comm_size(comm, &N);
+  MPI_Comm_size(comm, &processSize);
   MPI_Comm_rank(comm, &id);
-  // printf("Process %d of %d\n", id, N);
+
   long found = 0L;
   int ready = 0;
 
-  //distribuir trabajo de forma naive
-  long rangePerNode = upper / N;
+  //distribution of work
+  long rangePerNode = upper / processSize;
   myLower = rangePerNode * id;
   myUpper = rangePerNode * (id+1) -1;
-  if(id == N-1){
-    //compensar residuo
+  if(id == processSize-1){
+
     myUpper = upper;
   }
   printf("Process %d lower %ld upper %ld\n", id, myLower, myUpper);
 
-  //non blocking receive, revisar en el for si alguien ya encontro
+  //non blocking receive, to check if other process found the key
   start = MPI_Wtime();
   MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
 
   for(long i = myLower; i<myUpper; ++i){
     MPI_Test(&req, &ready, MPI_STATUS_IGNORE);
     if(ready)
-      break;  //ya encontraron, salir
+      break;  //if someone found the key, stop
 
     if(tryKey(i, cipher, ciphLen)){
       found = i;
       printf("Process %d found the key\n", id);
       end = MPI_Wtime();
-      for(int node=0; node<N; node++){
+      for(int node=0; node<processSize; node++){
         MPI_Send(&found, 1, MPI_LONG, node, 0, comm); //avisar a otros
       }
       break;
@@ -211,8 +243,7 @@ int main(int argc, char *argv[]){ //char **argv
 
   }
 
-
-  //wait y luego imprimir el texto
+  //wait
   if(id==0){
     MPI_Wait(&req, &st);
     decrypt(found, cipher, ciphLen);
@@ -223,6 +254,6 @@ int main(int argc, char *argv[]){ //char **argv
   }
   printf("Process %d exiting\n", id);
 
-  //FIN entorno MPI
+  //END MPI
   MPI_Finalize();
 }
