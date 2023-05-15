@@ -10,7 +10,7 @@
  * @copyright Copyright (c) 2023
  *
  */
-//Reference: Barlas Capitulo 5
+// Reference: Barlas Capitulo 5
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,7 @@
  * @brief Read a file into a buffer
  * @param filename
  * @return char*
-*/
+ */
 char *readFile(const char *filename)
 {
   FILE *fp;
@@ -75,7 +75,7 @@ char *readFile(const char *filename)
  * @param len length of the text
  *
  * @return void
-*/
+ */
 void decrypt(long key, char *ciph, int len)
 {
   // Set parity of key
@@ -128,7 +128,7 @@ void decrypt(long key, char *ciph, int len)
  * @param len length of the text
  *
  * @return void
-*/
+ */
 void encryptText(long key, char *ciph, int len)
 {
   // Set parity of key
@@ -178,7 +178,7 @@ char search[] = "es una prueba de";
  * @param len length of the text
  *
  * @return int 1 if the key is correct, 0 otherwise
-*/
+ */
 int tryKey(long key, char *ciph, int len)
 {
   char temp[len + 1]; //+1 because of the terminal character
@@ -195,71 +195,77 @@ int main(int argc, char *argv[])
   {
     return 1;
   }
-  theKey = strtol(argv[1], NULL, 10); //getting the key from the command line
+  theKey = strtol(argv[1], NULL, 10); // getting the key from the command line
 
-  int processSize, id;
+  int N, rank;
   long upper = (1L << 56);
-  long found = 0;
+  long realKey = 0;
   MPI_Status st;
   MPI_Request req;
 
   MPI_Comm comm = MPI_COMM_WORLD;
   double start, end;
 
-  char* text = readFile("text.txt");
-  if (text == NULL) {
-      printf("Error reading \n");
-      return 0;
+  char *text = readFile("text.txt");
+  if (text == NULL)
+  {
+    printf("Error reading \n");
+    return 0;
   }
 
   int flag;
-  int ciphLen = strlen((char *) text);
+  int ciphLen = strlen((char *)text);
 
-  //encrypt the text
-  char cipher[ciphLen+1];
+  // encrypt the text
+  char cipher[ciphLen + 1];
   memcpy(cipher, text, ciphLen);
-  cipher[ciphLen]=0;
+  cipher[ciphLen] = 0;
 
   encryptText(theKey, cipher, ciphLen);
   printf("Cipher text: %s\n", cipher);
 
-  //MPI
+  // MPI
   MPI_Init(&argc, &argv);
-  MPI_Comm_rank(MPI_COMM_WORLD, &id);
-  MPI_Comm_size(MPI_COMM_WORLD, &processSize);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &N);
 
-  start = MPI_Wtime(); //start time
-  MPI_Irecv((void*)&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &req);
+  start = MPI_Wtime(); // start time
+  MPI_Irecv((void *)&realKey, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &req);
   int iterCount = 0;
 
-  //Iterate in step way
-  for( long i=id;i<upper;i+=processSize)
+  long keyToTry = rank;
+  while (keyToTry < upper)
   {
-    if (tryKey(i,(char*)cipher,ciphLen))
+    if (tryKey(keyToTry, (char *)cipher, ciphLen))
     {
-      found=i;
-       end = MPI_Wtime();
-      for( int node=0;node<processSize;node++)
-        MPI_Send((void*)&found,1,MPI_LONG,node,0, MPI_COMM_WORLD);
-
+      realKey = keyToTry;
+      end = MPI_Wtime();
+      int process = 0;
+      while (process < N)
+      {
+        MPI_Send((void *)&realKey, 1, MPI_LONG, process, 0, MPI_COMM_WORLD);
+        process++;
+      }
       break;
     }
-    if(++iterCount% 1000 == 0) //test every 1000 iterations
+    if (++iterCount % 1000 == 0) // test every 1000 iterations
     {
-      MPI_Test(&req,&flag,&st);
-      if(flag)  break;
+      MPI_Test(&req, &flag, &st);
+      if (flag)
+        break;
     }
+    keyToTry += N;
   }
 
-  if (id== 0)
+  if (rank == 0)
   {
-    MPI_Wait(&req,&st); //  in case process 0 finishes  before the key  is  found
-    decrypt(found,(char*)cipher,ciphLen);
-    cipher[ciphLen+1]='\0';
-    printf( "%li %s \n",found,cipher);
-    printf("Time %f",end-start);
+    MPI_Wait(&req, &st); //  in case process 0 finishes  before the key  is  found
+    decrypt(realKey, (char *)cipher, ciphLen);
+    cipher[ciphLen + 1] = '\0';
+    printf("%li %s \n", realKey, cipher);
+    printf("Time %f", end - start);
   }
 
-  //End MPi
+  // End MPi
   MPI_Finalize();
 }
